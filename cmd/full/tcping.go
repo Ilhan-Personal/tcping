@@ -14,70 +14,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
 	"github.com/google/go-github/v45/github"
+	"github.com/pouriyajamshidi/tcping/v2/internal/models"
 )
-
-var version = "" // set at compile time
-
-const (
-	owner      = "pouriyajamshidi"
-	repo       = "tcping"
-	dnsTimeout = 2 * time.Second
-)
-
-// printer is a set of methods for printers to implement.
-//
-// Printers should NOT modify any existing data nor do any calculations.
-// They should only perform visual operations on given data.
-type printer interface {
-	// printStart should print the first message, after the program starts.
-	// This message is printed only once, at the very beginning.
-	printStart(hostname string, port uint16)
-
-	// printProbeSuccess should print a message after each successful probe.
-	// hostname could be empty, meaning it's pinging an address.
-	// streak is the number of successful consecutive probes.
-	printProbeSuccess(localAddr string, userInput userInput, streak uint, rtt float32)
-
-	// printProbeFail should print a message after each failed probe.
-	// hostname could be empty, meaning it's pinging an address.
-	// streak is the number of successful consecutive probes.
-	printProbeFail(userInput userInput, streak uint)
-
-	// printRetryingToResolve should print a message with the hostname
-	// it is trying to resolve an ip for.
-	//
-	// This is only being printed when the -r flag is applied.
-	printRetryingToResolve(hostname string)
-
-	// printTotalDownTime should print a downtime duration.
-	//
-	// This is being called when host was unavailable for some time
-	// but the latest probe was successful (became available).
-	printTotalDownTime(downtime time.Duration)
-
-	// printStatistics should print a message with
-	// helpful statistics information.
-	//
-	// This is being called on exit and when user hits "Enter".
-	printStatistics(s tcping)
-
-	// printVersion should print the current version.
-	printVersion()
-
-	// printInfo should a message, which is not directly related
-	// to the pinging and serves as a helpful information.
-	//
-	// Example of such: new version with -u flag.
-	printInfo(format string, args ...any)
-
-	// printError should print an error message.
-	// Printer should also apply \n to the given string, if needed.
-	printError(format string, args ...any)
-}
 
 type tcping struct {
-	printer                   // printer holds the chosen printer implementation for outputting information and data.
+	printer                   models.Printer // printer holds the chosen printer implementation for outputting information and data.
 	startTime                 time.Time
 	endTime                   time.Time
 	startOfUptime             time.Time
@@ -85,11 +28,11 @@ type tcping struct {
 	lastSuccessfulProbe       time.Time
 	lastUnsuccessfulProbe     time.Time
 	ticker                    *time.Ticker // ticker is used to handle time between probes.
-	longestUptime             longestTime
-	longestDowntime           longestTime
+	longestUptime             models.LongestTime
+	longestDowntime           models.LongestTime
 	rtt                       []float32
-	hostnameChanges           []hostnameChange
-	userInput                 userInput
+	hostnameChanges           []models.HostnameChange
+	userInput                 models.UserInput
 	ongoingSuccessfulProbes   uint
 	ongoingUnsuccessfulProbes uint
 	totalDowntime             time.Duration
@@ -102,56 +45,13 @@ type tcping struct {
 	destIsIP                  bool // destIsIP suppresses printing the IP information twice when hostname is not provided
 }
 
-type userInput struct {
-	ip                       netip.Addr
-	hostname                 string
-	networkInterface         networkInterface
-	retryHostnameLookupAfter uint // Retry resolving target's hostname after a certain number of failed requests
-	probesBeforeQuit         uint
-	timeout                  time.Duration
-	intervalBetweenProbes    time.Duration
-	port                     uint16
-	useIPv4                  bool
-	useIPv6                  bool
-	shouldRetryResolve       bool
-	showFailuresOnly         bool
-	showLocalAddress         bool
-}
+var version = "" // set at compile time
 
-type genericUserInputArgs struct {
-	retryResolve         *uint
-	probesBeforeQuit     *uint
-	timeout              *float64
-	secondsBetweenProbes *float64
-	intName              *string
-	showFailuresOnly     *bool
-	showLocalAddress     *bool
-	args                 []string
-}
-
-type networkInterface struct {
-	remoteAddr *net.TCPAddr
-	dialer     net.Dialer
-	use        bool
-}
-
-type longestTime struct {
-	start    time.Time
-	end      time.Time
-	duration time.Duration
-}
-
-type rttResult struct {
-	min        float32
-	max        float32
-	average    float32
-	hasResults bool
-}
-
-type hostnameChange struct {
-	Addr netip.Addr `json:"addr,omitempty"`
-	When time.Time  `json:"when,omitempty"`
-}
+const (
+	owner      = "pouriyajamshidi"
+	repo       = "tcping"
+	dnsTimeout = 2 * time.Second
+)
 
 // signalHandler catches SIGINT and SIGTERM then prints tcping stats
 func signalHandler(tcping *tcping) {
@@ -352,7 +252,6 @@ func processUserInput(tcping *tcping) {
 	showLocalAddress := flag.Bool("show-local-address", false, "Show source address and port used for probe.")
 	showFailuresOnly := flag.Bool("show-failures-only", false, "Show only the failed probes.")
 	showHelp := flag.Bool("h", false, "show help message.")
-
 
 	flag.CommandLine.Usage = usage
 
